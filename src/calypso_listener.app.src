@@ -1,0 +1,11 @@
+% -*- mode: Erlang;-*-
+{application, calypso_listener,
+ [
+	{ mod, { calypso_listener_app, [] } },
+  {description, "Calypso Listener for transfer data from/to GPS-devices"},
+  {vsn, "1"},
+  {registered, []},
+  {modules, []},
+  {applications, [ kernel, stdlib, ranch, lager, calypso_starter, calypso_core, calypso_registrar ]},
+  {env, []}
+]}.
