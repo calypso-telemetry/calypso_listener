@@ -1,5 +1,5 @@
 -module(cl_protocol).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -include_lib("calypso_core/include/logger.hrl").
 

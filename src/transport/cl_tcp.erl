@@ -1,5 +1,5 @@
 -module(cl_tcp).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -include("tcp_transport.hrl").
 -include_lib("calypso_core/include/cl_device.hrl").

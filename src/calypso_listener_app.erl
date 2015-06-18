@@ -1,5 +1,5 @@
 -module(calypso_listener_app).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -behaviour(application).
 

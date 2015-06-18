@@ -1,5 +1,5 @@
 -module(cl_device_command).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -include("device_command.hrl").
 -include_lib("calypso_core/include/cl_device.hrl").

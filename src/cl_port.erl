@@ -1,5 +1,5 @@
 -module(cl_port).
--author("begemot").
+-author("Sergey Loguntsov").
 
 %% API
 -export([

@@ -1,4 +1,4 @@
--author("begemot").
+-author("Sergey Loguntsov").
 
 -compile([{parse_transform, lager_transform}]).
 

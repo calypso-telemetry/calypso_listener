@@ -1,5 +1,5 @@
 -module(cl_tcp_transport).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -include("logger.hrl").
 -include("tcp_transport.hrl").

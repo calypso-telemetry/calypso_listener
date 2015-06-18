@@ -1,5 +1,5 @@
 -module(cl_transport).
--author("begemot").
+-author("Sergey Loguntsov").
 
 -include_lib("calypso_core/include/cl_device.hrl").
 -include("device_command.hrl").

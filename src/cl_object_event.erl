@@ -1,5 +1,5 @@
 -module(cl_object_event).
--author("begemot").
+-author("Sergey Loguntsov").
 
 %% API
 -export([

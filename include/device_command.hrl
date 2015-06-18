@@ -1,4 +1,4 @@
--author("begemot").
+-author("Sergey Loguntsov").
 
 -record(device_command, {
   id :: binary(),

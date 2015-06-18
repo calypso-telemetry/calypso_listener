@@ -1,5 +1,5 @@
 -module(calypso_traffic_hooks).
--author("begemot").
+-author("Sergey Loguntsov").
 
 %% API
 -export([

@@ -1,4 +1,4 @@
--author("begemot").
+-author("Sergey Loguntsov").
 
 -record(tcp_transport, {
   module :: module(),
