@@ -1,4 +1,4 @@
--module(cl_upd_transport).
+-module(cl_udp_transport).
 -author("Sergey Loguntsov").
 
 -include_lib("calypso_core/include/logger.hrl").
