@@ -74,6 +74,11 @@ set_device_login(Login, Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
     { ok, Device = #device{} } ->
       case cl_device:is_active(Device) of
         true ->
+          case calypso_db:get_telemetry(raw, { device, cl_device:id(Device) }, current) of
+            { ok, Telemetry } when ?IS_TELEMETRY(Telemetry) ->
+              cl_device:telemetry(Telemetry, Device);
+            _ -> Device
+          end,
           calypso_online_hooks:fire_online({ device, Device}),
           cl_transport:register(cl_device:id(Device), Protocol),
           { ok, Protocol#cl_tcp_transport{ device = Device}, Device};
