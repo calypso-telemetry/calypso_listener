@@ -36,7 +36,7 @@ start_link() ->
   ignore |
   {error, Reason :: term()}).
 add_udp(Port, Module, Options) ->
-  supervisor:start_child(?SERVER, { Port, { cl_udp_transport, start_link, [ Module, Port, Options ] }, permanent, 2000, worker, [ cl_udp_transport ]}).
+  supervisor:start_child(?SERVER, { Port, { cl_udp_listener, start_link, [ Module, Port, Options ] }, permanent, 2000, worker, [ cl_udp_transport ]}).
 
 delete_udp(Port) ->
   supervisor:terminate_child(?SERVER, Port),

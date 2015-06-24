@@ -2,6 +2,7 @@
 -author("Sergey Loguntsov").
 
 -include_lib("calypso_core/include/cl_device.hrl").
+-include_lib("calypso_core/include/logger.hrl").
 
 %% API
 -export([
@@ -30,7 +31,7 @@
 %%% API
 %%%===================================================================
 
-start_link(Port, Module, Options ) when is_atom(Module), is_integer(Port) ->
+start_link(Module, Port, Options ) when is_atom(Module), is_integer(Port) ->
   gen_server:start_link(?MODULE, [ Port, Module, Options ], []).
 
 %%%===================================================================
@@ -74,7 +75,8 @@ handle_cast(_Request, State) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
 handle_info({udp, Socket, _IP, _InPortNo, Packet}, State) ->
-  Result =try
+  lager:info("Udp packet: ~p", [ Packet ]),
+  Result = try
     case cl_protocol:get_device_login(State#state.module, Packet) of
       { ok, Login} ->
         DevicePid = case cl_udp_device:pid(Login) of
@@ -96,7 +98,7 @@ handle_info({udp, Socket, _IP, _InPortNo, Packet}, State) ->
   catch
     throw:Reason-> Reason
   end,
-  inet:setopts(Socket, { active, once }),
+  inet:setopts(Socket, [{ active, once }]),
   Result;
 
 handle_info(_Info, State) ->
