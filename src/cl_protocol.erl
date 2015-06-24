@@ -7,6 +7,7 @@
 -export([
   info/1, start/3, stop/2,
   init/3, terminate/4,
+  get_device_login/2,
   handle_frame_in/4, handle_frame_out/4, handle_info/4
 ]).
 
@@ -22,9 +23,10 @@
 -callback start(Port :: port_number(), Options :: options()) -> ok | { error, Reason :: state() }.
 -callback stop(Port :: port_number()) -> ok.
 
--callback init(Options :: options(), Protocol :: protocol()) -> answer().
+-callback init(Options :: options(), Protocol :: protocol()) -> { ok, State :: term(), Protocol :: protocol() }.
 -callback terminate(Reason :: term(), State :: state(), Protocol :: protocol()) -> ok.
 
+-callback get_device_login(Binary :: binary()) -> { ok, Login :: term() } | undefined.
 -callback handle_frame_in(Binary :: binary(), State :: state(),Protocol :: protocol() ) -> answer().
 -callback handle_frame_out(Msg :: term(), State :: state(), Protocol :: protocol()) -> answer().
 -callback handle_info(Msg :: term(), State :: state(), Protocol :: protocol()) -> answer().
@@ -44,6 +46,9 @@ init(Module, Options, Protocol) ->
 terminate(Module, Reason, State, Protocol) ->
   ?INFO("Terminate ~p ~p", [ Module, Reason ]),
   Module:terminate(Reason, State, Protocol).
+
+get_device_login(Module, Binary) ->
+  Module:get_device_login(Binary).
 
 handle_frame_in(Module, Binary, State, Protocol) ->
   ?INFO("Receive data ~p ~p ~p ~p", [ Binary, Module, State, Protocol ]),

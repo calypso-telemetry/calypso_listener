@@ -28,11 +28,7 @@ version() -> "0.01".
   {error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
   cl_device_command:init(),
-  Pid = spawn_link(fun() ->
-    calypso_starter:empty_loop(
-      fun() -> ok end
-    ) end),
-  { ok,Pid }.
+  calypso_listener_sup:start_link().
 
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->

@@ -1,96 +1,122 @@
 -module(cl_transport).
 -author("Sergey Loguntsov").
 
+-include("tcp/tcp_transport.hrl").
+-include("udp/udp_transport.hrl").
+
 -include_lib("calypso_core/include/cl_device.hrl").
--include("device_command.hrl").
+-include_lib("calypso_core/include/cl_telemetry.hrl").
+-include_lib("calypso_core/include/logger.hrl").
 
 %% API
--export([register/2, process/1, send/1, send/2, close/2, listen/4, device_update/2]).
+-export([
+  register/2,
+  send/2, get_send/1, clear_send/1,
+  state/1, set_state/2,
+  set_rest/2,
+  module/1, upgrade/2,
+  set_device_login/2, device_id/1, device/1, set_device/2, set_telemetry/2, set_data/3, change_device/2
+]).
 
--callback send(Pid, Binary) -> ok
-  when
-    Pid :: pid(),
-    Binary :: binary().
+-type protocol() :: cl_tcp_transport:protocol().
 
--callback close(Pid, Reason) -> ok
-  when
-    Pid :: pid(),
-    Reason :: term().
+register(Id, #cl_tcp_transport{}) ->
+  cl_transport_handler:register(Id, cl_tcp_transport);
 
--callback device_update(Pid, Device) -> ok
-  when
-    Pid :: pid(),
-    Device :: cl_device:device().
+register(Id, #udp_transport{}) ->
+  cl_transport_handler:register(Id, cl_udp_transport).
 
--callback start_listener(ProtocolModule, Port, Options) -> { ok, Pid } | { error, _ }
-  when
-    ProtocolModule :: atom(),
-    Port :: integer(),
-    Options :: term(),
-    Pid :: pid().
+-spec send(protocol(), binary()) -> { ok |  {error, Reason :: term()}, cl_tcp_transport:protocol()}.
+send(#cl_tcp_transport{ send = Send } = Transport, Binary) ->
+  { ok, Transport#cl_tcp_transport{
+    send = [ Binary | Send ]
+  }};
+send(Transport = #udp_transport{}, _) ->
+  { { error, unsupported }, Transport }.
 
--callback stop_listener(Port) -> ok
-  when
-    Port :: integer().
+get_send(#cl_tcp_transport{ send = Send }) -> lists:reverse(Send);
+get_send(#udp_transport{}) -> [].
 
-send(DCommand) when ?IS_DEVICE_COMMAND(DCommand) ->
-  try
-    Result = case process(cl_device_command:device_id(DCommand)) of
-      undefined ->
-        { error, offline };
-      Process ->
-        case catch send(Process, cl_device_command:command(DCommand)) of
-          ok -> throw(ok);
-          { error, unsupported } = Error0 -> throw(Error0);
-          { error, _ } = Error0 -> Error0;
-          { 'EXIT', { noproc, _ } } -> { error, offline }
-        end
-    end,
-    case catch calypso_db:create(device_command, DCommand) of
-      { ok, NewId } ->
-        { saved, NewId, Result };
-      { 'EXIT', { not_created , _ }} ->
-        Result
-    end
-  catch
-    throw:Reason -> Reason
+clear_send(#cl_tcp_transport{} = Transport) ->
+  Transport#cl_tcp_transport{ send = []};
+clear_send(T = #udp_transport{}) -> T.
+
+-spec state(protocol()) -> term().
+state(Transport) when ?IS_TCP_TRANSPORT(Transport) -> Transport#cl_tcp_transport.state;
+state(Transport) when ?IS_UDP_TRANSPORT(Transport) -> Transport#udp_transport.state.
+
+-spec set_state(term(), protocol()) -> protocol().
+set_state(State, Transport) when ?IS_TCP_TRANSPORT(Transport) ->
+  Transport#cl_tcp_transport{
+    state = State
+  };
+set_state(State, Transport) when ?IS_UDP_TRANSPORT(Transport) ->
+  Transport#udp_transport{
+    state = State
+  }.
+
+set_rest(Rest, Transport) when ?IS_TCP_TRANSPORT(Transport), is_binary(Rest) ->
+  Transport#cl_tcp_transport{
+    rest = Rest
+  };
+set_rest(_, Transport) when ?IS_UDP_TRANSPORT(Transport) -> Transport.
+
+module(Protocol) when ?IS_TCP_TRANSPORT(Protocol) -> Protocol#cl_tcp_transport.module;
+module(Protocol) when ?IS_UDP_TRANSPORT(Protocol) -> Protocol#udp_transport.module.
+
+upgrade(Module, Protocol) when ?IS_TCP_TRANSPORT(Protocol), is_atom(Module) ->
+  Protocol#cl_tcp_transport{ module = Module };
+upgrade(Module, Protocol) when ?IS_UDP_TRANSPORT(Protocol), is_atom(Module) ->
+  Protocol#udp_transport{ module = Module }.
+
+set_device_login(Login, Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
+  case calypso_db:get(device, { by_login, Login}) of
+    { ok, Device = #device{} } ->
+      case cl_device:is_active(Device) of
+        true ->
+          calypso_online_hooks:fire_online({ device, Device}),
+          cl_transport:register(cl_device:id(Device), Protocol),
+          { ok, Protocol#cl_tcp_transport{ device = Device}, Device};
+        false ->
+          { error, is_not_active }
+      end;
+    undefined -> undefined
   end.
 
-send(Device, Command) when ?IS_DEVICE(Device) ->
-  DCommand = cl_device_command:new(Device, Command),
-  send(DCommand);
-
-send(Process, Data) ->
-  calypso_registrar:apply(Process, send, [Data]).
-
-close(undefined, _Reason) -> ok;
-close(Process, Reason) ->
-  calypso_registrar:apply(Process, close, [ Reason ]).
-
-device_update(undefined, _Reason) -> ok;
-device_update(Process, Device) when ?IS_DEVICE(Device) ->
-  calypso_registrar:apply(Process, device_update, [ Device ]).
-
-listen(Module, SensorModule, Port, Config) ->
-  Module:listen(SensorModule, Port, Config).
-
-register(Id, Module) when is_atom(Module) ->
-  Process = process(Id),
-  Flag = case {calypso_registrar:pid(Process), self()} of
-    { undefined, _ } -> true;
-    {Pid, Self} when is_pid(Pid), Pid =/= Self ->
-      cl_transport:close(Process, double_connection),
-      true;
-    { Pid, Pid } ->
-      false
-  end,
-  if
-    Flag ->
-      calypso_registrar:register(Module, { transport, Id});
-    true ->
-      ok
+device_id(Protocol) ->
+  case device(Protocol) of
+    undefined -> undefined;
+    { ok, Sensor } -> cl_device:id(Sensor)
   end.
 
-process(Id) ->
-  calypso_registrar:process({transport, Id}).
+device(Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
+  case Protocol#cl_tcp_transport.device of
+    undefined -> undefined;
+    Device when ?IS_DEVICE(Device) -> { ok, Device }
+  end;
+device(Protocol) when ?IS_UDP_TRANSPORT(Protocol) ->
+  case Protocol#udp_transport.device of
+    undefined -> undefined;
+    Device when ?IS_DEVICE(Device) -> { ok, Device }
+  end.
 
+set_device(DeviceNew, Protocol = #cl_tcp_transport{ device = DeviceOld }) when ?IS_DEVICE(DeviceNew) ->
+  cl_transport_hooks:device_change_fire(DeviceOld, DeviceNew),
+  Protocol#cl_tcp_transport{ device = DeviceNew };
+set_device(DeviceNew, Protocol = #udp_transport{ device = DeviceOld }) when ?IS_DEVICE(DeviceNew) ->
+  cl_transport_hooks:device_change_fire(DeviceOld, DeviceNew),
+  Protocol#udp_transport{ device = DeviceNew }.
+
+set_telemetry(_, Protocol = #cl_tcp_transport{ device = undefined}) ->
+  error(device_not_authorise, [ Protocol ]);
+set_telemetry(Telemetry, Protocol = #cl_tcp_transport{ device = Device}) when ?IS_DEVICE(Device), ?IS_TELEMETRY(Telemetry) ->
+  set_device(cl_device:telemetry(Telemetry, Device), Protocol).
+
+set_data(Time, Data, Transport) ->
+  T = cl_telemetry:new(Time, Data),
+  set_telemetry(T, Transport).
+
+change_device(Fun, Protocol) ->
+  { ok, Device } = cl_transport:device(Protocol),
+  NewDevice = Fun(Device),
+  cl_transport:set_device(NewDevice, Protocol).

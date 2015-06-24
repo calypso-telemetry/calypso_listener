@@ -81,7 +81,7 @@ get_by_device(Device) when ?IS_DEVICE(Device) ->
 
 send_loop([], _Device) -> ok;
 send_loop([{ _ , Command}|List], Device) ->
-  case cl_transport:send(cl_transport:process(cl_device:id(Device)), command(Command)) of
+  case cl_transport_handler:send(cl_transport_handler:process(cl_device:id(Device)), command(Command)) of
     ok -> ok;
     { error, unsupported } -> ok
   end,
