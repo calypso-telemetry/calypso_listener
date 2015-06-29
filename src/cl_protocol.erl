@@ -45,6 +45,7 @@ init(Module, Options, Protocol) ->
 
 terminate(Module, Reason, State, Protocol) ->
   ?INFO("Terminate ~p ~p", [ Module, Reason ]),
+  calypso_traffic_hooks:connection_close_fire(Module, cl_transport:device(Protocol), Reason),
   Module:terminate(Reason, State, Protocol).
 
 get_device_login(Module, Binary) ->

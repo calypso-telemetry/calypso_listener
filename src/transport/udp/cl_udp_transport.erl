@@ -8,7 +8,7 @@
 -export([send/2, close/2, start_listener/3, stop_listener/1, device_update/2]).
 
 start_listener(Module, fake, Config) ->
-  State = #udp_transport{
+  State = #cl_udp_transport{
     module = Module,
     socket = fake
   },

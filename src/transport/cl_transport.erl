@@ -23,7 +23,7 @@
 register(Id, #cl_tcp_transport{}) ->
   cl_transport_handler:register(Id, cl_tcp_transport);
 
-register(Id, #udp_transport{}) ->
+register(Id, #cl_udp_transport{}) ->
   cl_transport_handler:register(Id, cl_udp_transport).
 
 -spec send(protocol(), binary()) -> { ok |  {error, Reason :: term()}, cl_tcp_transport:protocol()}.
@@ -31,19 +31,19 @@ send(#cl_tcp_transport{ send = Send } = Transport, Binary) ->
   { ok, Transport#cl_tcp_transport{
     send = [ Binary | Send ]
   }};
-send(Transport = #udp_transport{}, _) ->
+send(Transport = #cl_udp_transport{}, _) ->
   { { error, unsupported }, Transport }.
 
 get_send(#cl_tcp_transport{ send = Send }) -> lists:reverse(Send);
-get_send(#udp_transport{}) -> [].
+get_send(#cl_udp_transport{}) -> [].
 
 clear_send(#cl_tcp_transport{} = Transport) ->
   Transport#cl_tcp_transport{ send = []};
-clear_send(T = #udp_transport{}) -> T.
+clear_send(T = #cl_udp_transport{}) -> T.
 
 -spec state(protocol()) -> term().
 state(Transport) when ?IS_TCP_TRANSPORT(Transport) -> Transport#cl_tcp_transport.state;
-state(Transport) when ?IS_UDP_TRANSPORT(Transport) -> Transport#udp_transport.state.
+state(Transport) when ?IS_UDP_TRANSPORT(Transport) -> Transport#cl_udp_transport.state.
 
 -spec set_state(term(), protocol()) -> protocol().
 set_state(State, Transport) when ?IS_TCP_TRANSPORT(Transport) ->
@@ -51,7 +51,7 @@ set_state(State, Transport) when ?IS_TCP_TRANSPORT(Transport) ->
     state = State
   };
 set_state(State, Transport) when ?IS_UDP_TRANSPORT(Transport) ->
-  Transport#udp_transport{
+  Transport#cl_udp_transport{
     state = State
   }.
 
@@ -62,26 +62,27 @@ set_rest(Rest, Transport) when ?IS_TCP_TRANSPORT(Transport), is_binary(Rest) ->
 set_rest(_, Transport) when ?IS_UDP_TRANSPORT(Transport) -> Transport.
 
 module(Protocol) when ?IS_TCP_TRANSPORT(Protocol) -> Protocol#cl_tcp_transport.module;
-module(Protocol) when ?IS_UDP_TRANSPORT(Protocol) -> Protocol#udp_transport.module.
+module(Protocol) when ?IS_UDP_TRANSPORT(Protocol) -> Protocol#cl_udp_transport.module.
 
 upgrade(Module, Protocol) when ?IS_TCP_TRANSPORT(Protocol), is_atom(Module) ->
   Protocol#cl_tcp_transport{ module = Module };
 upgrade(Module, Protocol) when ?IS_UDP_TRANSPORT(Protocol), is_atom(Module) ->
-  Protocol#udp_transport{ module = Module }.
+  Protocol#cl_udp_transport{ module = Module }.
 
 set_device_login(Login, Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
   case calypso_db:get(device, { by_login, Login}) of
     { ok, Device = #device{} } ->
       case cl_device:is_active(Device) of
         true ->
-          case calypso_db:get_telemetry(raw, { device, cl_device:id(Device) }, current) of
+          NewDevice = case calypso_db:get_telemetry(raw, { device, cl_device:id(Device) }, current) of
             { ok, Telemetry } when ?IS_TELEMETRY(Telemetry) ->
               cl_device:telemetry(Telemetry, Device);
             _ -> Device
           end,
-          calypso_online_hooks:fire_online({ device, Device}),
-          cl_transport:register(cl_device:id(Device), Protocol),
-          { ok, Protocol#cl_tcp_transport{ device = Device}, Device};
+          calypso_traffic_hooks:connection_open_fire(module(Protocol), NewDevice),
+          calypso_online_hooks:fire_online({ device, NewDevice}),
+          cl_transport:register(cl_device:id(NewDevice), Protocol),
+          { ok, Protocol#cl_tcp_transport{ device = NewDevice}, NewDevice};
         false ->
           { error, is_not_active }
       end;
@@ -100,7 +101,7 @@ device(Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
     Device when ?IS_DEVICE(Device) -> { ok, Device }
   end;
 device(Protocol) when ?IS_UDP_TRANSPORT(Protocol) ->
-  case Protocol#udp_transport.device of
+  case Protocol#cl_udp_transport.device of
     undefined -> undefined;
     Device when ?IS_DEVICE(Device) -> { ok, Device }
   end.
@@ -108,9 +109,9 @@ device(Protocol) when ?IS_UDP_TRANSPORT(Protocol) ->
 set_device(DeviceNew, Protocol = #cl_tcp_transport{ device = DeviceOld }) when ?IS_DEVICE(DeviceNew) ->
   cl_transport_hooks:device_change_fire(DeviceOld, DeviceNew),
   Protocol#cl_tcp_transport{ device = DeviceNew };
-set_device(DeviceNew, Protocol = #udp_transport{ device = DeviceOld }) when ?IS_DEVICE(DeviceNew) ->
+set_device(DeviceNew, Protocol = #cl_udp_transport{ device = DeviceOld }) when ?IS_DEVICE(DeviceNew) ->
   cl_transport_hooks:device_change_fire(DeviceOld, DeviceNew),
-  Protocol#udp_transport{ device = DeviceNew }.
+  Protocol#cl_udp_transport{ device = DeviceNew }.
 
 set_telemetry(_, Protocol = #cl_tcp_transport{ device = undefined}) ->
   error(device_not_authorise, [ Protocol ]);

@@ -1,6 +1,6 @@
 -author("Sergey Loguntsov").
 
--record(udp_transport, {
+-record(cl_udp_transport, {
   module :: module(),
   state :: term(),
   socket :: port() | fake,
@@ -10,4 +10,4 @@
   device = undefined :: cl_device:device()
 }).
 
--define(IS_UDP_TRANSPORT(Transport), is_record(Transport, udp_transport)).
+-define(IS_UDP_TRANSPORT(Transport), is_record(Transport, cl_udp_transport)).

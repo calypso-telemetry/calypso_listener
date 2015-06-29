@@ -24,7 +24,7 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-  udp_protocol :: #udp_transport{},
+  udp_protocol :: #cl_udp_transport{},
   timeout :: pos_integer(),
   stop_reason :: term(),
   timer_pid :: pid()
@@ -66,14 +66,14 @@ device_update(Pid, Device) when ?IS_DEVICE(Device) ->
   {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([ Socket, Module, DeviceLogin, Device, Timeout, Options ]) ->
-  { ok, State, NewProtocol } = cl_protocol:init(Module, Options, #udp_transport{
+  { ok, State, NewProtocol } = cl_protocol:init(Module, Options, #cl_udp_transport{
     socket = Socket,
     module = Module
   }),
   cl_transport_handler:register({ udp, DeviceLogin}, cl_udp_transport),
   cl_transport_handler:register(cl_device:id(Device), cl_udp_transport),
   {ok, #state{
-    udp_protocol = NewProtocol#udp_transport{
+    udp_protocol = NewProtocol#cl_udp_transport{
       state = State,
       device = Device,
       module = Module
@@ -100,14 +100,22 @@ handle_call(_Request, _From, State) ->
 handle_cast({ packet, Binary}, State) ->
   wakeup_timer(State#state.timer_pid),
   Protocol = State#state.udp_protocol,
-  answer_for_cast(cl_protocol:handle_frame_in(Protocol#udp_transport.module, Binary, Protocol#udp_transport.state, Protocol), State);
+  Result = answer_for_cast(cl_protocol:handle_frame_in(Protocol#cl_udp_transport.module, Binary, Protocol#cl_udp_transport.state, Protocol), State),
+  case Result of
+    {noreply, #cl_udp_transport{ device = Device }, _ } when Device =/= undefined ->
+      calypso_traffic_hooks:receive_fire({device, Device}, Binary);
+    { stop, #cl_udp_transport{ device = Device }, _ } when Device =/= undefined ->
+      calypso_traffic_hooks:receive_fire({device, Device}, Binary);
+    _ -> ok
+  end,
+  Result;
 
 handle_cast({ device_update, NewDevice}, State) ->
   Protocol = State#state.udp_protocol,
-  Device = Protocol#udp_transport.device,
+  Device = Protocol#cl_udp_transport.device,
   Device1 = cl_device:merge(NewDevice, Device),
   NewState = State#state{
-    udp_protocol = Protocol#udp_transport{
+    udp_protocol = Protocol#cl_udp_transport{
       device = Device1
     }
   },
@@ -140,7 +148,7 @@ terminate(R, State) ->
     Any -> Any
   end,
   Protocol = State#state.udp_protocol,
-  cl_protocol:terminate(Protocol#udp_transport.module, Reason, Protocol#udp_transport.state, Protocol),
+  cl_protocol:terminate(Protocol#cl_udp_transport.module, Reason, Protocol#cl_udp_transport.state, Protocol),
   stop_timer(State#state.timer_pid),
   ok.
 
@@ -177,7 +185,7 @@ wakeup_timer(Pid) ->
 answer_for_cast({ Answer, St, Protocol }, State) when is_tuple(Answer),?IS_UDP_TRANSPORT(Protocol) ->
   answer_for_cast_actions(Answer,
     State#state{
-      udp_protocol = Protocol#udp_transport{
+      udp_protocol = Protocol#cl_udp_transport{
         state = St
       }
     }).

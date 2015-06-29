@@ -112,7 +112,9 @@ handle_info({tcp, _Socket, Data}, State ) ->
   case Result1 of
     {noreply, #cl_tcp_transport{ device = Device }, _ } when Device =/= undefined ->
       calypso_traffic_hooks:receive_fire({device, Device}, Data);
-    { stop, _, _ } -> ok
+    { stop, #cl_tcp_transport{ device = Device }, _ } when Device =/= undefined ->
+      calypso_traffic_hooks:receive_fire({device, Device}, Data);
+    _ -> ok
   end,
   inet:setopts(State#cl_tcp_transport.socket, [{active, once}]),
   Result1;
