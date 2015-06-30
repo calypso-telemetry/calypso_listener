@@ -74,7 +74,7 @@ set_device_login(Login, Protocol) when ?IS_TCP_TRANSPORT(Protocol) ->
     { ok, Device = #device{} } ->
       case cl_device:is_active(Device) of
         true ->
-          NewDevice = case calypso_db:get_telemetry(raw, { device, cl_device:id(Device) }, current) of
+          NewDevice = case calypso_db:get_telemetry(raw, { device, Device }, current) of
             { ok, Telemetry } when ?IS_TELEMETRY(Telemetry) ->
               cl_device:telemetry(Telemetry, Device);
             _ -> Device
